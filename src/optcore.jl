@@ -129,7 +129,7 @@ function optimize(
         f::Function,
         lb::Vector{Float64},
         ub::Vector{Float64};
-        optimizer::AbstractOptimizer=DifferentialEvolution(),
+        optimizer::AbstractOptimizer=DE(),
         x0::Vector{Vector{Float64}}=[NaN*ones(length(lb))],
         minFit::Float64=-Inf,
         maxIter::Int=200,
