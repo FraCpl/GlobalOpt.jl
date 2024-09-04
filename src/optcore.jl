@@ -155,7 +155,7 @@ function optimize(
         # Post-process iteration
         costHist[iter] = pop.fit[pop.iBest]
         if verbose
-            println("Iter $iter, fitness: $(costHist[iter])")
+            println("Iter $iter, cost: $(pop.cost[pop.iBest]), constraint: $(pop.constr[pop.iBest])")
         end
 
         # Check exit conditions
