@@ -78,6 +78,7 @@ end
 
 function evalFitness!(pop::Population)
     # Constraints accounting http://repository.ias.ac.in/9407/1/310.pdf
+    # Deb, An Efficient Constraint Handling Method for Genetic Algorithms
     isFeasible = pop.constr .== 0.0
     pop.fit .= copy(pop.cost)
     if any(isFeasible)
