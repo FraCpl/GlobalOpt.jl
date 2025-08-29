@@ -16,33 +16,28 @@ mutable struct DE <: AbstractOptimizer
     F::Float64
     CR::Float64
 end
+
 function DE(; strategy=2, F=0.8, CR=0.9)
     if abs(strategy) == 11
         CR = 0.8
     end
-    F = max(0.0, min(2.0, F))
-    CR = max(0.0, min(1.0, CR))
-    return DE(strategy, F, CR)
+    return DE(strategy, clamp(F, 0.0, 2.0), clamp(CR, 0.0, 1.0))
 end
 
 function evolve!(pop::Population, optimizer::DE)
     # Pre-allocate stuff
-    iParents = zeros(Int, 5)
-    xOffspring = similar(pop.x[1])
+    xOffspring = pop.xTmp
 
     # Start DE cycle
     for i in eachindex(pop.x)
-        # Select 5 different random parents
-        iParents .= shuffle(vcat(1:i-1, i+1:pop.Npop))[1:5]
-
         # Perform Mutation
-        xOffspring .= mutation(i, optimizer, pop, iParents)
+        mutation!(xOffspring, i, optimizer, pop)
 
         # Perform Crossover - BIN (if strategy > 0) or EXP (if strategy < 0)
-        xOffspring .= crossover(i, optimizer, pop, xOffspring)
+        crossover!(xOffspring, i, optimizer, pop)
 
         # Evaluate cost and constraints of offspring
-        xOffspring .= pop.applyBounds(xOffspring)
+        pop.applyBounds!(xOffspring)
         costOffspring, constrOffspring = pop.fun(xOffspring)
 
         # Selection - one by one comparison
@@ -53,19 +48,34 @@ function evolve!(pop::Population, optimizer::DE)
     evalFitness!(pop)
 end
 
+function randomParentIndex(i, k, idx)
+    k += 1
+    iOut = idx[k]
+    while iOut == i
+        k += 1
+        iOut = idx[k]
+    end
+    return iOut, k
+end
+
 # [1] Qiang and Mitchell, Unified Differential Evolution Algorithm for
 #     Global Optimization.
 #     https://www.osti.gov/servlets/purl/1163659#:~:text=The#20DE#2Frand#2D#20to#2D,the#20current#20target#20parent#20vector.
 #
 # Author: F. Capolupo
 # European Space Agency, 2022
-@views function mutation(i::Int, optimizer::DE, pop::Population, iParents::Vector{Int})
+@views function mutation!(xOffspring::Vector{Float64}, i::Int, optimizer::DE, pop::Population)
 
     strategy = abs(optimizer.strategy)
-    if strategy > 99
-        # Random strategy
-        strategy = rand(1:11)
-    end
+    if strategy > 99; strategy = rand(1:11); end         # Random strategy
+
+    # Select 5 different random parents
+    shuffle!(pop.idx); k = 0
+    ip1, k = randomParentIndex(i, k, pop.idx)
+    ip2, k = randomParentIndex(i, k, pop.idx)
+    ip3, k = randomParentIndex(i, k, pop.idx)
+    ip4, k = randomParentIndex(i, k, pop.idx)
+    ip5, k = randomParentIndex(i, k, pop.idx)
 
     # Perform Mutation [1]
     # X: bin or exp, depending on 'useBin' flag
@@ -74,79 +84,82 @@ end
     # to be perturbed, y is the number of difference vectors considered for
     # perturbation of x, and z stands for the type of crossover being used
     # (exp: exponential; bin: binomial).
+    xp1 = pop.x[ip1]; xp2 = pop.x[ip2]; xp3 = pop.x[ip3]
+    xp4 = pop.x[ip4]; xp5 = pop.x[ip5]; xi = pop.x[i]
+    xBest = pop.x[pop.iBest]; F = optimizer.F
+
     if strategy == 1 # DE/rand/1/X
-        return pop.x[iParents[1]] + optimizer.F.*(pop.x[iParents[2]] - pop.x[iParents[3]])
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xp1[j] + F*(xp2[j] - xp3[j])
+        end
+    elseif strategy == 2 # DE/best/1/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xBest[j] + F*(xp1[j] - xp2[j])
+        end
+    elseif strategy == 3 # DE/current-to-best/1/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xi[j] + F*(xBest[j] - xi[j] + xp1[j] - xp3[j])
+        end
+    elseif strategy == 4 # DE/current-to-rand/1/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xi[j] + F*(xp1[j] - xi[j] + xp2[j] - xp3[j])
+        end
+    elseif strategy == 5 # DE/rand-to-best/1/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xp1[j] + F*(xBest[j] - xi[j] + xp2[j] - xp3[j])
+        end
+    elseif strategy == 6 # DE/rand/2/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xp1[j] + F*(xp2[j] - xp3[j] + xp4[j] - xp5[j])
+        end
+    elseif strategy == 7 # DE/best/2/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xBest[j] + F*(xp1[j] - xp2[j] + xp3[j] - xp4[j])
+        end
+    elseif strategy == 8 # DE/current-to-best/2/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xi[j] + F*(xBest[j] - xi[j] + xp1[j] - xp2[j] + xp3[j] - xp4[j])
+        end
+    elseif strategy == 9 # DE/current-to-rand/2/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xi[j] + F*(xp1[j] - xi[j] + xp2[j] - xp3[j] + xp4[j] - xp5[j])
+        end
+    elseif strategy == 10 # DE/rand-to-best/2/X
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = xp1[j] + F*(xBest[j] - xi[j] + xp2[j] - xp3[j] + xp4[j] - xp5[j])
+        end
+    else # uDE from Qiang and Mitchell [This uses CR = 0.8]
+        @inbounds for j in eachindex(xOffspring)
+            xOffspring[j] = 0.5*xi[j] + 0.25*xBest[j] + 0.25*xp1[j] + 0.2*(xp2[j] + xp4[j] - xp3[j] - xp5[j])
+        end
     end
-
-    if strategy == 2 # DE/best/1/X
-        return pop.x[pop.iBest] + optimizer.F.*(pop.x[iParents[1]] - pop.x[iParents[2]])
-    end
-
-    if strategy == 3 # DE/current-to-best/1/X
-       return pop.x[i] + optimizer.F.*(pop.x[pop.iBest] - pop.x[i] + pop.x[iParents[1]] - pop.x[iParents[2]])
-    end
-
-    if strategy == 4 # DE/current-to-rand/1/X
-        return pop.x[i] + optimizer.F.*(pop.x[iParents[1]] - pop.x[i] + pop.x[iParents[2]] - pop.x[iParents[3]])
-    end
-
-    if strategy == 5 # DE/rand-to-best/1/X
-        return pop.x[iParents[1]] + optimizer.F.*(pop.x[pop.iBest] - pop.x[i] + pop.x[iParents[2]] - pop.x[iParents[3]])
-    end
-
-    if strategy == 6 # DE/rand/2/X
-        return pop.x[iParents[1]] + optimizer.F.*(pop.x[iParents[2]] - pop.x[iParents[3]] + pop.x[iParents[4]] - pop.x[iParents[5]])
-    end
-
-    if strategy == 7 # DE/best/2/X
-        return pop.x[pop.iBest] + optimizer.F.*(pop.x[iParents[2]] - pop.x[iParents[3]] + pop.x[iParents[4]] - pop.x[iParents[5]])
-    end
-
-    if strategy == 8 # DE/current-to-best/2/X
-        return pop.x[i] + optimizer.F.*(pop.x[pop.iBest] - pop.x[i] + pop.x[iParents[1]] - pop.x[iParents[2]] + pop.x[iParents[3]] - pop.x[iParents[4]])
-    end
-
-    if strategy == 9 # DE/current-to-rand/2/X
-        return pop.x[i] + optimizer.F.*(pop.x[iParents[1]] - pop.x[i] + pop.x[iParents[2]] - pop.x[iParents[3]] + pop.x[iParents[4]] - pop.x[iParents[5]])
-    end
-
-    if strategy == 10 # DE/rand-to-best/2/X
-        return pop.x[iParents[1]] + optimizer.F.*(pop.x[pop.iBest] - pop.x[i] + pop.x[iParents[2]] - pop.x[iParents[3]] + pop.x[iParents[4]] - pop.x[iParents[5]])
-    end
-
-    if strategy == 11 # uDE from Qiang and Mitchell [This uses CR = 0.8]
-        return 0.5*pop.x[i] + 0.25*pop.x[pop.iBest] + 0.25*pop.x[iParents[1]] + 0.2*(pop.x[iParents[2]] + pop.x[iParents[4]] - pop.x[iParents[3]] - pop.x[iParents[5]])
-    end
+    return
 end
 
-function crossover(i::Int, optimizer::DE, pop::Population, xOffspring::Vector{Float64})
-    x = copy(pop.x[i])
-    Nx = length(x)
+function crossover!(xOffspring::Vector{Float64}, i::Int, optimizer::DE, pop::Population)
+    xi = pop.x[i]
+    Nx = length(xi)
 
     if optimizer.strategy > 0
         # BIN - Binomial crossover
-        jRand = rand(1:Nx)
-        x[jRand] = xOffspring[1]    # Mutate at least one component
-        for j in eachindex(x)
-            if rand() < optimizer.CR
-                x[j] = xOffspring[j]
+        jRand = rand(1:Nx)              # Keep at least one component mutated
+        @inbounds for j in eachindex(xi)
+            if rand() > optimizer.CR && j != jRand
+                xOffspring[j] = xi[j]
             end
         end
     else
         # EXP - Exponential crossover
-        L = 0
-        while true
+        L = 1
+        while rand() ≤ optimizer.CR && L < Nx
             L += 1
-            if (rand() > optimizer.CR || L > Nx)
-                break
-            end
         end
-        n = rand(1:Nx)
-        j = mod.(n:n+L-1, Nx)
-        j[j .== 0] .= Nx
-        for jj in j
-            x[jj] = xOffspring[jj]
+
+        j0 = rand(1:Nx)
+        @inbounds for k in 0:L-1
+            j = mod1(j0 + k, Nx)
+            xOffspring[j] = xi[j]
         end
     end
-    return x
+    return
 end

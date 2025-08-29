@@ -81,7 +81,8 @@ function evolve!(pop::Population, optimizer::GA)
 
     # Update population
     for q in optimizer.Nelite+1:pop.Npop
-        pop.x[iSort[q]] .= pop.applyBounds(xNew[iSort[q]])
+        pop.x[iSort[q]] .= xNew[iSort[q]]
+        pop.applyBounds!(pop.x[iSort[q]])
         pop.cost[iSort[q]], pop.constr[iSort[q]] = pop.fun(pop.x[iSort[q]])
     end
 

@@ -1,9 +1,9 @@
 abstract type AbstractOptimizer end
 
-mutable struct Population
+mutable struct Population{F, B}
     Npop::Int                       # Number of members of the population
-    fun::Function                   # Cost function handler
-    applyBounds::Function           # lb, ub bounds function
+    fun::F                          # Cost function handler
+    applyBounds!::B                 # lb, ub bounds function
 
     x::Vector{Vector{Float64}}      # Population members
     lb::Vector{Float64}
@@ -12,32 +12,48 @@ mutable struct Population
     cost::Vector{Float64}           # Cost of x
     constr::Vector{Float64}         # Constraint violation of x
     fit::Vector{Float64}            # Fitness of x
+
+    # Allocations
+    xTmp::Vector{Float64}
+    isFeasible::BitVector
+    idx::Vector{Int}
 end
 
 function Population(Npop, f, x0, lb, ub, eqTol, bounds)
     Nx = length(lb)
 
-    if bounds == :clip
-        pop = Population(Npop, x -> evalFunction(f, x, eqTol), x -> clipBounds(x, lb, ub),
-            [zeros(Nx) for _ in 1:Npop], lb, ub, 1, zeros(Npop), zeros(Npop), zeros(Npop))
-    elseif bounds == :rand
-        pop = Population(Npop, x -> evalFunction(f, x, eqTol), x -> randBounds(x, lb, ub),
-            [zeros(Nx) for _ in 1:Npop], lb, ub, 1, zeros(Npop), zeros(Npop), zeros(Npop))
-    else
-        pop = Population(Npop, x -> evalFunction(f, x, eqTol), x -> x,
-            [zeros(Nx) for _ in 1:Npop], lb, ub, 1, zeros(Npop), zeros(Npop), zeros(Npop))
-    end
+    # Choose bounds function
+    applyBounds! = bounds === :clip ? (x -> clipBounds!(x, lb, ub)) :
+                   bounds === :rand ? (x -> randBounds!(x, lb, ub)) :
+                   (x -> nothing)
+
+    pop = Population(
+        Npop,
+        x -> evalFunction(f, x, eqTol),   # fun
+        applyBounds!,                     # bounds
+        [zeros(Nx) for _ in 1:Npop],      # x
+        lb,
+        ub,
+        1,                                # iBest
+        zeros(Npop),                      # cost
+        zeros(Npop),                      # constr
+        zeros(Npop),                      # fit
+        zeros(Nx),                        # xTmp
+        falses(Npop),                     # isFeasible
+        collect(1:Npop),
+    )
 
     # Random initialization of all members of the population
-    for i in eachindex(pop.x)
-        pop.x[i] .= lb + (ub - lb).*rand(Nx)
+    @inbounds for i in eachindex(pop.x), j in 1:Nx
+        pop.x[i][j] = lb[j] + (ub[j] - lb[j])*rand()
     end
 
     # Add initial guesses as provided by the user to the population
     # TODO: if the user provides more than Npop, then select the Npop fittest out of x0
     if !isnan(x0[1][1])
         for i in 1:min(lastindex(x0), Npop)
-            pop.x[i] .= pop.applyBounds(x0[i])
+            pop.x[i] = copy(x0[i])
+            pop.applyBounds!(pop.x[i])
         end
 
         # Shuffle order of population
@@ -45,7 +61,7 @@ function Population(Npop, f, x0, lb, ub, eqTol, bounds)
     end
 
     # Evaludate fitness of initial population
-    for i in eachindex(pop.x)
+    @inbounds for i in eachindex(pop.x)
         pop.cost[i], pop.constr[i] = pop.fun(pop.x[i])
     end
     evalFitness!(pop)
@@ -53,68 +69,90 @@ function Population(Npop, f, x0, lb, ub, eqTol, bounds)
     return pop
 end
 
-function clipBounds(x, lb, ub)
-    return min.(max.(x, lb), ub)
+@inline function clipBounds!(x, lb, ub)
+    @inbounds for i in eachindex(x)
+        x[i] = clamp(x[i], lb[i], ub[i])
+    end
+    return
 end
 
-function randBounds(x, lb, ub)
-    xOut = copy(x)
-    for i in eachindex(x)
+@inline function randBounds!(x, lb, ub)
+    @inbounds for i in eachindex(x)
         if x[i] < lb[i] || x[i] > ub[i]
-            xOut[i] = lb[i] + (ub[i] - lb[i])*rand()
+            x[i] = lb[i] + (ub[i] - lb[i])*rand()
         end
     end
-    return xOut
+    return
 end
 
-function evalFunction(f, x, eqTol)
+@inline function evalFunction(f, x, eqTol)
     cost, g, h = f(x)
-    gh = vcat(g, abs.(h) .- eqTol)
     if isnan(cost)
         cost = Inf
     end
-    return cost, sum(gh[gh .> 0.0])
+    constr = 0.0
+    @inbounds for gj in g
+        if gj > 0.0
+            constr += gj
+        end
+    end
+    @inbounds for hj in h
+        if hj < -eqTol || hj > eqTol
+            constr += abs(hj)
+        end
+    end
+    return cost, constr
 end
 
 function evalFitness!(pop::Population)
     # Constraints accounting http://repository.ias.ac.in/9407/1/310.pdf
     # Deb, An Efficient Constraint Handling Method for Genetic Algorithms
-    isFeasible = pop.constr .== 0.0
-    pop.fit .= copy(pop.cost)
-    if any(isFeasible)
+
+    # Determine feasibility of each element in the population
+    maxFeasibleCost = -Inf
+    anyFeasible = false
+    @inbounds for i in eachindex(pop.isFeasible)
+        isFeas = pop.constr[i] == 0.0
+        pop.isFeasible[i] = isFeas
+        pop.fit[i] = pop.cost[i]
+        if isFeas
+            anyFeasible = true
+            if pop.cost[i] > maxFeasibleCost
+                maxFeasibleCost = pop.cost[i]
+            end
+        end
+    end
+
+    if anyFeasible
         # At least one solution is feasible
-        pop.fit[.!isFeasible] .= maximum(pop.cost[isFeasible]) .+ pop.constr[.!isFeasible]
+        @inbounds for j in eachindex(pop.fit)
+            if !pop.isFeasible[j]
+                pop.fit[j] = maxFeasibleCost + pop.constr[j]
+            end
+        end
     else
         # All solutions are unfeasible
-        pop.fit .+= pop.constr
+        @inbounds for j in eachindex(pop.fit)
+            pop.fit[j] += pop.constr[j]
+        end
     end
+
+    # Identify best element in the population
     pop.iBest = argmin(pop.fit)
+    return
 end
 
-function compare1vs1!(i::Int, pop::Population, xNew, costNew, constrNew)
+@inline function compare1vs1!(i::Int, pop::Population, xNew::Vector{Float64}, costNew::Float64, constrNew::Float64)
+    costOld = pop.cost[i]
+    constrOld = pop.constr[i]
 
-    function updatePop!()
-        pop.x[i] .= copy(xNew)
+    # Deb's rules in a single if
+    if (constrNew == 0.0 && constrOld > 0.0) ||                     # new feasible, old infeasible
+       (constrNew > 0.0 && constrNew ≤ constrOld) ||                # both infeasible, new less violation
+       (constrNew == 0.0 && constrOld == 0.0 && costNew ≤ costOld)  # both feasible, cheaper
+        pop.x[i] .= xNew
         pop.cost[i] = costNew
         pop.constr[i] = constrNew
-    end
-
-    # New is feasible, old is not
-    if constrNew == 0.0 && pop.constr[i] > 0.0
-        updatePop!()
-        return
-    end
-
-    # Both are unfeasible, but new is less unfeasible than old
-    if constrNew > 0.0 && constrNew ≤ pop.constr[i]
-        updatePop!()
-        return
-    end
-
-    # Both are feasible and new is cheaper than old
-    if constrNew == 0.0 && pop.constr[i] == 0.0 && costNew ≤ pop.cost[i]
-        updatePop!()
-        return
     end
 end
 
@@ -130,7 +168,7 @@ function optimize(
         f::Function,
         lb::Vector{Float64},
         ub::Vector{Float64};
-        optimizer::AbstractOptimizer=DE(),
+        optimizer::T=DE(),
         x0::Vector{Vector{Float64}}=[NaN*ones(length(lb))],
         minFit::Float64=-Inf,
         maxIter::Int=200,
@@ -139,7 +177,7 @@ function optimize(
         Npop::Int=10*length(ub),
         bounds=:clip,                       # clip, rand, or none
         verbose::Bool=true,
-    )
+    ) where {T<:AbstractOptimizer}
 
     # Initialize population
     pop = Population(Npop, f, x0, lb, ub, eqTol, bounds)
