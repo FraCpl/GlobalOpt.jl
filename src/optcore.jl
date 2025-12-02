@@ -1,6 +1,6 @@
 abstract type AbstractOptimizer end
 
-mutable struct Population{F, B}
+mutable struct Population{F,B}
     Npop::Int                       # Number of members of the population
     fun::F                          # Cost function handler
     applyBounds!::B                 # lb, ub bounds function
@@ -23,15 +23,15 @@ function Population(Npop, f, x0, lb, ub, eqTol, bounds)
     Nx = length(lb)
 
     # Choose bounds function
-    applyBounds! = bounds === :clip ? (x -> clipBounds!(x, lb, ub)) :
-                   bounds === :rand ? (x -> randBounds!(x, lb, ub)) :
-                   (x -> nothing)
+    applyBounds! =
+        bounds === :clip ? (x -> clipBounds!(x, lb, ub)) :
+        bounds === :rand ? (x -> randBounds!(x, lb, ub)) : (x -> nothing)
 
     pop = Population(
         Npop,
         x -> evalFunction(f, x, eqTol),   # fun
         applyBounds!,                     # bounds
-        [zeros(Nx) for _ in 1:Npop],      # x
+        [zeros(Nx) for _ = 1:Npop],      # x
         lb,
         ub,
         1,                                # iBest
@@ -44,14 +44,14 @@ function Population(Npop, f, x0, lb, ub, eqTol, bounds)
     )
 
     # Random initialization of all members of the population
-    @inbounds for i in eachindex(pop.x), j in 1:Nx
+    @inbounds for i in eachindex(pop.x), j = 1:Nx
         pop.x[i][j] = lb[j] + (ub[j] - lb[j])*rand()
     end
 
     # Add initial guesses as provided by the user to the population
     # TODO: if the user provides more than Npop, then select the Npop fittest out of x0
     if !isnan(x0[1][1])
-        for i in 1:min(lastindex(x0), Npop)
+        for i = 1:min(lastindex(x0), Npop)
             pop.x[i] = copy(x0[i])
             pop.applyBounds!(pop.x[i])
         end
@@ -142,7 +142,13 @@ function evalFitness!(pop::Population)
     return
 end
 
-@inline function compare1vs1!(i::Int, pop::Population, xNew::Vector{Float64}, costNew::Float64, constrNew::Float64)
+@inline function compare1vs1!(
+    i::Int,
+    pop::Population,
+    xNew::Vector{Float64},
+    costNew::Float64,
+    constrNew::Float64,
+)
     costOld = pop.cost[i]
     constrOld = pop.constr[i]
 
@@ -165,19 +171,19 @@ The function 'f' must return
     f, g, h = f(x)
 """
 function optimize(
-        f::Function,
-        lb::Vector{Float64},
-        ub::Vector{Float64};
-        optimizer::T=DE(),
-        x0::Vector{Vector{Float64}}=[NaN*ones(length(lb))],
-        minFit::Float64=-Inf,
-        maxIter::Int=200,
-        stallIter::Int=20,
-        eqTol::Float64=1e-6,
-        Npop::Int=10*length(ub),
-        bounds=:clip,                       # clip, rand, or none
-        verbose::Bool=true,
-    ) where {T<:AbstractOptimizer}
+    f::Function,
+    lb::Vector{Float64},
+    ub::Vector{Float64};
+    optimizer::T = DE(),
+    x0::Vector{Vector{Float64}} = [NaN*ones(length(lb))],
+    minFit::Float64 = -Inf,
+    maxIter::Int = 200,
+    stallIter::Int = 20,
+    eqTol::Float64 = 1e-6,
+    Npop::Int = 10*length(ub),
+    bounds = :clip,                       # clip, rand, or none
+    verbose::Bool = true,
+) where {T<:AbstractOptimizer}
 
     # Initialize population
     pop = Population(Npop, f, x0, lb, ub, eqTol, bounds)
@@ -187,14 +193,16 @@ function optimize(
     costHist = fill(NaN, maxIter)
 
     # Start optimizing
-    for iter in 1:maxIter
+    for iter = 1:maxIter
         # Perform one iteration
         evolve!(pop, optimizer)
 
         # Post-process iteration
         costHist[iter] = pop.fit[pop.iBest]
         if verbose
-            println("Iter $iter, cost: $(pop.cost[pop.iBest]), constraint: $(pop.constr[pop.iBest])")
+            println(
+                "Iter $iter, cost: $(pop.cost[pop.iBest]), constraint: $(pop.constr[pop.iBest])",
+            )
         end
 
         # Check exit conditions

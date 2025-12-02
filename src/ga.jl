@@ -14,14 +14,14 @@ mutable struct GA <: AbstractOptimizer
     Nmutate::Int
 end
 function GA(;
-        selection::Function=tournament,  # tournament or roulette
-        crossover::Function=crossoverBlend,
-        mutation::Function=mutateUniform!,
-        EP::Float64=0.1,            # Elite percentage
-        CP::Float64=0.8,            # Crossover percentage
-        MP::Float64=0.07,           # Mutation probability
-        mutateParents::Bool=true,
-        )
+    selection::Function = tournament,  # tournament or roulette
+    crossover::Function = crossoverBlend,
+    mutation::Function = mutateUniform!,
+    EP::Float64 = 0.1,            # Elite percentage
+    CP::Float64 = 0.8,            # Crossover percentage
+    MP::Float64 = 0.07,           # Mutation probability
+    mutateParents::Bool = true,
+)
     return GA(selection, crossover, mutation, EP, CP, MP, mutateParents, false, 0, 0, 0)
 end
 
@@ -53,13 +53,14 @@ function evolve!(pop::Population, optimizer::GA)
 
     # Run evolution cycle
     iSort = sortperm(pop.fit)
-    for _ in 1:optimizer.Ncross
+    for _ = 1:optimizer.Ncross
         # Select parents
         iParents[1] = optimizer.selection(iSort, pop)
         iParents[2] = optimizer.selection(iSort, pop)
 
         # Perform crossover of parents
-        xNew[iSort[k]], xNew[iSort[k+1]] = optimizer.crossover(pop.x[iParents[1]], pop.x[iParents[2]])
+        xNew[iSort[k]], xNew[iSort[k+1]] =
+            optimizer.crossover(pop.x[iParents[1]], pop.x[iParents[2]])
 
         # Mutate children
         if optimizer.Nmutate == 0
@@ -69,7 +70,7 @@ function evolve!(pop::Population, optimizer::GA)
         k += 2
     end
 
-    for _ in 1:optimizer.Nmutate
+    for _ = 1:optimizer.Nmutate
         # Select parents
         iParents[1] = optimizer.selection(iSort, pop)
         xNew[iSort[k]] = copy(pop.x[iParents[1]])
@@ -80,7 +81,7 @@ function evolve!(pop::Population, optimizer::GA)
     end
 
     # Update population
-    for q in optimizer.Nelite+1:pop.Npop
+    for q = (optimizer.Nelite+1):pop.Npop
         pop.x[iSort[q]] .= xNew[iSort[q]]
         pop.applyBounds!(pop.x[iSort[q]])
         pop.cost[iSort[q]], pop.constr[iSort[q]] = pop.fun(pop.x[iSort[q]])
@@ -95,7 +96,7 @@ function tournament(iSort, pop::Population)
 end
 
 function roulette(iSort, pop::Population)
-    fitRw = 1.0./(1 .+ pop.fit)
+    fitRw = 1.0 ./ (1 .+ pop.fit)
     fitRw ./= sum(fitRw)
     # https://stackoverflow.com/questions/27559958/how-do-i-select-a-random-item-from-a-weighted-array-in-julia
     return iSort[findfirst(cumsum(fitRw) .> rand())]
@@ -111,6 +112,6 @@ end
 
 function crossoverBlend(x1, x2)
     α = rand(length(x1))
-    Δx = α.*(x2 - x1)
+    Δx = α .* (x2 - x1)
     return x1 - Δx, x2 + Δx
 end

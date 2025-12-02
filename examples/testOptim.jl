@@ -4,14 +4,15 @@ include("TestFunctions.jl")
 
 function main()
     # f = ackley; lb, ub = ackleyBounds()
-    f = beale;  lb, ub = bealeBounds()
+    f = beale;
+    lb, ub = bealeBounds()
     # plot()
 
-    xBest, pop, costHist = optimize(f, lb, ub; Npop=50, optimizer=GA(), verbose=false)
+    xBest, pop, costHist = optimize(f, lb, ub; Npop = 50, optimizer = GA(), verbose = false)
     @show pop.cost[pop.iBest], xBest
     # plot!(costHist; label="GA", lw=2, color=1)
 
-    xBest, pop, costHist = optimize(f, lb, ub; Npop=50, optimizer=DE(), verbose=false)
+    xBest, pop, costHist = optimize(f, lb, ub; Npop = 50, optimizer = DE(), verbose = false)
     @show pop.cost[pop.iBest], xBest
     # plot!(costHist; label="DE", lw=2, color=2)
 

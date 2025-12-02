@@ -17,7 +17,7 @@ mutable struct DE <: AbstractOptimizer
     CR::Float64
 end
 
-function DE(; strategy=2, F=0.8, CR=0.9)
+function DE(; strategy = 2, F = 0.8, CR = 0.9)
     if abs(strategy) == 11
         CR = 0.8
     end
@@ -64,13 +64,22 @@ end
 #
 # Author: F. Capolupo
 # European Space Agency, 2022
-@views function mutation!(xOffspring::Vector{Float64}, i::Int, optimizer::DE, pop::Population)
+@views function mutation!(
+    xOffspring::Vector{Float64},
+    i::Int,
+    optimizer::DE,
+    pop::Population,
+)
 
     strategy = abs(optimizer.strategy)
-    if strategy > 99; strategy = rand(1:11); end         # Random strategy
+    if strategy > 99
+        ;
+        strategy = rand(1:11);
+    end         # Random strategy
 
     # Select 5 different random parents
-    shuffle!(pop.idx); k = 0
+    shuffle!(pop.idx);
+    k = 0
     ip1, k = randomParentIndex(i, k, pop.idx)
     ip2, k = randomParentIndex(i, k, pop.idx)
     ip3, k = randomParentIndex(i, k, pop.idx)
@@ -84,9 +93,14 @@ end
     # to be perturbed, y is the number of difference vectors considered for
     # perturbation of x, and z stands for the type of crossover being used
     # (exp: exponential; bin: binomial).
-    xp1 = pop.x[ip1]; xp2 = pop.x[ip2]; xp3 = pop.x[ip3]
-    xp4 = pop.x[ip4]; xp5 = pop.x[ip5]; xi = pop.x[i]
-    xBest = pop.x[pop.iBest]; F = optimizer.F
+    xp1 = pop.x[ip1];
+    xp2 = pop.x[ip2];
+    xp3 = pop.x[ip3]
+    xp4 = pop.x[ip4];
+    xp5 = pop.x[ip5];
+    xi = pop.x[i]
+    xBest = pop.x[pop.iBest];
+    F = optimizer.F
 
     if strategy == 1 # DE/rand/1/X
         @inbounds for j in eachindex(xOffspring)
@@ -126,11 +140,16 @@ end
         end
     elseif strategy == 10 # DE/rand-to-best/2/X
         @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xp1[j] + F*(xBest[j] - xi[j] + xp2[j] - xp3[j] + xp4[j] - xp5[j])
+            xOffspring[j] =
+                xp1[j] + F*(xBest[j] - xi[j] + xp2[j] - xp3[j] + xp4[j] - xp5[j])
         end
     else # uDE from Qiang and Mitchell [This uses CR = 0.8]
         @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = 0.5*xi[j] + 0.25*xBest[j] + 0.25*xp1[j] + 0.2*(xp2[j] + xp4[j] - xp3[j] - xp5[j])
+            xOffspring[j] =
+                0.5*xi[j] +
+                0.25*xBest[j] +
+                0.25*xp1[j] +
+                0.2*(xp2[j] + xp4[j] - xp3[j] - xp5[j])
         end
     end
     return
@@ -156,7 +175,7 @@ function crossover!(xOffspring::Vector{Float64}, i::Int, optimizer::DE, pop::Pop
         end
 
         j0 = rand(1:Nx)
-        @inbounds for k in 0:L-1
+        @inbounds for k = 0:(L-1)
             j = mod1(j0 + k, Nx)
             xOffspring[j] = xi[j]
         end
