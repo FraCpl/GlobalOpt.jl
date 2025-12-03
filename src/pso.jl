@@ -12,15 +12,14 @@ mutable struct PSO <: AbstractOptimizer
     vk::Vector{Vector{Float64}}
     vb::Vector{Float64}
 end
-function PSO(; w::Float64 = 0.4, c1::Float64 = 2.1, c2::Float64 = 1.05, useStandard = false)
+function PSO(; w::Float64=0.4, c1::Float64=2.1, c2::Float64=1.05, useStandard=false)
     return PSO(w, c1, c2, useStandard, false, 0, [], [], [])
 end
 
 function initPSO!(optimizer::PSO, pop::Population)
     optimizer.vb = abs.(pop.ub - pop.lb)
     optimizer.Nx = length(pop.x[1])
-    optimizer.vk =
-        [-optimizer.vb + 2optimizer.vb .* rand(optimizer.Nx) for _ in eachindex(pop.x)]
+    optimizer.vk = [-optimizer.vb + 2optimizer.vb .* rand(optimizer.Nx) for _ in eachindex(pop.x)]
     optimizer.xk = copy(pop.x)
     optimizer.initDone = true
 end
@@ -44,8 +43,7 @@ function evolve!(pop::Population, optimizer::PSO)
                     optimizer.c2*rand(optimizer.Nx) .* (pop.x[pop.iBest] - optimizer.xk[i])
                 )/3
             R = rand()*norm(G)
-            optimizer.vk[i] .=
-                optimizer.w*optimizer.vk[i] + G + normalize(randn(optimizer.Nx))*R
+            optimizer.vk[i] .= optimizer.w*optimizer.vk[i] + G + normalize(randn(optimizer.Nx))*R
         else
             # Option 2: Classic PSO
             optimizer.vk[i] .=

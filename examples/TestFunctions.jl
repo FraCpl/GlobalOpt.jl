@@ -14,11 +14,7 @@ function ackleyBounds()
 end
 
 function beale(x)
-    return (1.5 - x[1] + x[1]*x[2])^2 +
-           (2.25 - x[1] + x[1]*x[2]^2)^2 +
-           (2.625 - x[1] + x[1]*x[2]^3)^2,
-    0.0,
-    0.0
+    return (1.5 - x[1] + x[1]*x[2])^2 + (2.25 - x[1] + x[1]*x[2]^2)^2 + (2.625 - x[1] + x[1]*x[2]^3)^2, 0.0, 0.0
 end
 
 function bealeBounds()
