@@ -181,7 +181,8 @@ function optimize(
     Npop::Int=10*length(ub),
     bounds=:clip,                       # clip, rand, or none
     verbose::Bool=true,
-) where {T<:AbstractOptimizer}
+    iterCallback::F=(iter, pop)->false,
+) where {T<:AbstractOptimizer, F}
 
     # Initialize population
     pop = Population(Npop, f, x0, lb, ub, eqTol, bounds)
@@ -197,26 +198,27 @@ function optimize(
 
         # Post-process iteration
         costHist[iter] = pop.fit[pop.iBest]
+        stop = iterCallback(iter, pop)
         if verbose
             println("Iter $iter, cost: $(pop.cost[pop.iBest]), constraint: $(pop.constr[pop.iBest])")
         end
 
         # Check exit conditions
+        if stop
+            msg = "Iterations stopped (iterCallback)"
+            break
+        end
         if costHist[iter] < minFit
             msg = "Solution found."
             break
         end
-        if iter > stallIter
-            if costHist[iter] == costHist[iter - stallIter]
-                msg = "Solution stalled."
-                break
-            end
+        if iter > stallIter && costHist[iter] == costHist[iter - stallIter]
+            msg = "Solution stalled."
+            break
         end
     end
 
     # Print exit message and return solution
-    if verbose
-        println(msg)
-    end
+    verbose && println(msg)
     return copy(pop.x[pop.iBest]), pop, costHist[.!isnan.(costHist)]
 end

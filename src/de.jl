@@ -67,12 +67,11 @@ end
 @views function mutation!(xOffspring::Vector{Float64}, i::Int, optimizer::DE, pop::Population)
     strategy = abs(optimizer.strategy)
     if strategy > 99
-        ;
-        strategy = rand(1:11);
+        strategy = rand(1:11)
     end         # Random strategy
 
     # Select 5 different random parents
-    shuffle!(pop.idx);
+    shuffle!(pop.idx)
     k = 0
     ip1, k = randomParentIndex(i, k, pop.idx)
     ip2, k = randomParentIndex(i, k, pop.idx)
@@ -87,13 +86,13 @@ end
     # to be perturbed, y is the number of difference vectors considered for
     # perturbation of x, and z stands for the type of crossover being used
     # (exp: exponential; bin: binomial).
-    xp1 = pop.x[ip1];
-    xp2 = pop.x[ip2];
+    xp1 = pop.x[ip1]
+    xp2 = pop.x[ip2]
     xp3 = pop.x[ip3]
-    xp4 = pop.x[ip4];
-    xp5 = pop.x[ip5];
+    xp4 = pop.x[ip4]
+    xp5 = pop.x[ip5]
     xi = pop.x[i]
-    xBest = pop.x[pop.iBest];
+    xBest = pop.x[pop.iBest]
     F = optimizer.F
 
     if strategy == 1 # DE/rand/1/X
