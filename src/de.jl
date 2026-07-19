@@ -11,7 +11,7 @@
 #
 # Author: F. Capolupo
 # European Space Agency, 2022
-mutable struct DE <: AbstractOptimizer
+struct DE <: AbstractOptimizer
     strategy::Int
     F::Float64
     CR::Float64
