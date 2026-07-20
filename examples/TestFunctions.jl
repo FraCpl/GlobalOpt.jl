@@ -20,3 +20,12 @@ end
 function bealeBounds()
     return -4.5 .* [1; 1], 4.5 .* [1; 1]
 end
+
+function himmelblauBounds()
+    return [-4.0; -4.0], [4.0; 4.0]
+end
+
+function himmelblau(X)
+    x, y = X
+    return (x * x + y - 11.0)^2 + (x + y^2 - 7.0)^2, 0.0, 0.0
+end

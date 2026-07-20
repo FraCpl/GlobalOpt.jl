@@ -178,11 +178,18 @@ function optimize(
     maxIter::Int=200,
     stallIter::Int=20,
     eqTol::Float64=1e-6,
-    Npop::Int=10*length(ub),
+    Npop::Int=min(50, 10*length(ub)),
     bounds=:clip,                       # clip, rand, or none
     verbose::Bool=true,
     iterCallback::F=(iter, pop)->false,
 ) where {T<:AbstractOptimizer, F}
+
+    # Check NelderMead properties
+    if T == NelderMead
+        Nx = length(lb)
+        Npop = Nx + 1
+        @assert optimizer.Nx == Nx "Wrong number of parameters set for NelderMead, use: optimizer=NelderMead($Nx)"
+    end
 
     # Initialize population
     pop = Population(Npop, f, x0, lb, ub, eqTol, bounds)
@@ -198,10 +205,8 @@ function optimize(
 
         # Post-process iteration
         costHist[iter] = pop.fit[pop.iBest]
-        stop = iterCallback(iter, pop)
-        if verbose
-            println("Iter $iter, cost: $(pop.cost[pop.iBest]), constraint: $(pop.constr[pop.iBest])")
-        end
+        stop = iterCallback(iter, pop)          # User-defined callback
+        verbose && println("Iter $iter, cost: $(pop.cost[pop.iBest]), constraint: $(pop.constr[pop.iBest])")
 
         # Check exit conditions
         if stop
