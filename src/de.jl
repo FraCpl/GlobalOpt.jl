@@ -11,20 +11,24 @@
 #
 # Author: F. Capolupo
 # European Space Agency, 2022
-struct DE <: AbstractOptimizer
-    strategy::Int
+include("deStrategies.jl")
+
+abstract type AbstractCrossoverDE end
+struct BinomialCxDE <: AbstractCrossoverDE end
+struct ExponentialCxDE <: AbstractCrossoverDE end
+
+struct DE{S<:AbstractStrategyDE, X<:AbstractCrossoverDE} <: AbstractOptimizer
+    strategy::S
+    cross::X
     F::Float64
     CR::Float64
 end
 
-function DE(; strategy=2, F=0.8, CR=0.9)
-    if abs(strategy) == 11
-        CR = 0.8
-    end
-    return DE(strategy, clamp(F, 0.0, 2.0), clamp(CR, 0.0, 1.0))
+function DE(; strategy::S=StrategyDE2(), F=0.8, CR=0.9, cx::X=BinomialCxDE()) where {S<:AbstractStrategyDE, X<:AbstractCrossoverDE}
+    return DE(strategy, cx, clamp(F, 0.0, 2.0), clamp(CR, 0.0, 1.0))
 end
 
-function evolve!(pop::Population, optimizer::DE)
+function evolve!(pop::Population, optimizer::DE{S, X}) where {S<:AbstractStrategyDE, X<:AbstractCrossoverDE}
     # Pre-allocate stuff
     xOffspring = pop.xTmp
 
@@ -64,11 +68,7 @@ end
 #
 # Author: F. Capolupo
 # European Space Agency, 2022
-@views function mutation!(xOffspring::Vector{Float64}, i::Int, optimizer::DE, pop::Population)
-    strategy = abs(optimizer.strategy)
-    if strategy > 99
-        strategy = rand(1:11)
-    end         # Random strategy
+function mutation!(xOffspring::Vector{Float64}, i::Int, optimizer::DE, pop::Population)
 
     # Select 5 different random parents
     shuffle!(pop.idx)
@@ -93,80 +93,36 @@ end
     xp5 = pop.x[ip5]
     xi = pop.x[i]
     xBest = pop.x[pop.iBest]
-    F = optimizer.F
+    mutate!(optimizer.strategy, optimizer.F, xOffspring, xi, xBest, xp1, xp2, xp3, xp4, xp5)
 
-    if strategy == 1 # DE/rand/1/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xp1[j] + F*(xp2[j] - xp3[j])
-        end
-    elseif strategy == 2 # DE/best/1/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xBest[j] + F*(xp1[j] - xp2[j])
-        end
-    elseif strategy == 3 # DE/current-to-best/1/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xi[j] + F*(xBest[j] - xi[j] + xp1[j] - xp3[j])
-        end
-    elseif strategy == 4 # DE/current-to-rand/1/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xi[j] + F*(xp1[j] - xi[j] + xp2[j] - xp3[j])
-        end
-    elseif strategy == 5 # DE/rand-to-best/1/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xp1[j] + F*(xBest[j] - xi[j] + xp2[j] - xp3[j])
-        end
-    elseif strategy == 6 # DE/rand/2/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xp1[j] + F*(xp2[j] - xp3[j] + xp4[j] - xp5[j])
-        end
-    elseif strategy == 7 # DE/best/2/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xBest[j] + F*(xp1[j] - xp2[j] + xp3[j] - xp4[j])
-        end
-    elseif strategy == 8 # DE/current-to-best/2/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xi[j] + F*(xBest[j] - xi[j] + xp1[j] - xp2[j] + xp3[j] - xp4[j])
-        end
-    elseif strategy == 9 # DE/current-to-rand/2/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xi[j] + F*(xp1[j] - xi[j] + xp2[j] - xp3[j] + xp4[j] - xp5[j])
-        end
-    elseif strategy == 10 # DE/rand-to-best/2/X
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = xp1[j] + F*(xBest[j] - xi[j] + xp2[j] - xp3[j] + xp4[j] - xp5[j])
-        end
-    else # uDE from Qiang and Mitchell [This uses CR = 0.8]
-        @inbounds for j in eachindex(xOffspring)
-            xOffspring[j] = 0.5*xi[j] + 0.25*xBest[j] + 0.25*xp1[j] + 0.2*(xp2[j] + xp4[j] - xp3[j] - xp5[j])
+    return nothing
+end
+
+# BIN - Binomial crossover
+function crossover!(xOffspring::Vector{Float64}, i::Int, optimizer::DE{S, BinomialCxDE}, pop::Population) where {S<:AbstractStrategyDE}
+    xi = pop.x[i]
+    Nx = length(xi)
+    jRand = rand(1:Nx)              # Keep at least one component mutated
+    @inbounds for j in eachindex(xi)
+        if rand() > optimizer.CR && j != jRand
+            xOffspring[j] = xi[j]
         end
     end
     return nothing
 end
 
-function crossover!(xOffspring::Vector{Float64}, i::Int, optimizer::DE, pop::Population)
+# EXP - Exponential crossover
+function crossover!(xOffspring::Vector{Float64}, i::Int, optimizer::DE{S, ExponentialCxDE}, pop::Population) where {S<:AbstractStrategyDE}
     xi = pop.x[i]
     Nx = length(xi)
-
-    if optimizer.strategy > 0
-        # BIN - Binomial crossover
-        jRand = rand(1:Nx)              # Keep at least one component mutated
-        @inbounds for j in eachindex(xi)
-            if rand() > optimizer.CR && j != jRand
-                xOffspring[j] = xi[j]
-            end
-        end
-    else
-        # EXP - Exponential crossover
-        L = 1
-        while rand() ≤ optimizer.CR && L < Nx
-            L += 1
-        end
-
-        j0 = rand(1:Nx)
-        @inbounds for k in 0:(L - 1)
-            j = mod1(j0 + k, Nx)
-            xOffspring[j] = xi[j]
-        end
+    L = 1
+    while rand() ≤ optimizer.CR && L < Nx
+        L += 1
+    end
+    j0 = rand(1:Nx)
+    @inbounds for k in 0:(L - 1)
+        j = mod1(j0 + k, Nx)
+        xOffspring[j] = xi[j]
     end
     return nothing
 end
