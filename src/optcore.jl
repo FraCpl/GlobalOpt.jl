@@ -199,7 +199,7 @@ function optimize(
     costHist = fill(NaN, maxIter)
 
     # Start optimizing
-    for iter in 1:maxIter
+    @inbounds for iter in 1:maxIter
         # Perform one iteration
         evolve!(pop, optimizer)
 
@@ -225,5 +225,9 @@ function optimize(
 
     # Print exit message and return solution
     verbose && println(msg)
-    return copy(pop.x[pop.iBest]), pop, costHist[.!isnan.(costHist)]
+    iLast = findlast(isnan, costHist)
+    if !isnothing(iLast)
+        costHist = costHist[1:iLast]
+    end
+    return pop.x[pop.iBest], pop, costHist
 end

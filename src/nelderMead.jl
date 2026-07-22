@@ -6,10 +6,10 @@ struct NelderMead <: AbstractOptimizer
 
     # workspace
     Nx::Int
-    xc::Vector{Float64}   # centroid
-    xr::Vector{Float64}
-    xe::Vector{Float64}
-    xc2::Vector{Float64}
+    x0::Vector{Float64}     # Centroid
+    xr::Vector{Float64}     # Reflected point
+    xe::Vector{Float64}     # Expanded point
+    xc::Vector{Float64}     # Contracted point
 end
 
 NelderMead(Nx::Int; α::Float64=1.0, γ::Float64=2.0, ρ::Float64=0.5, σ::Float64=0.5) =
@@ -38,34 +38,34 @@ function evolve!(pop::Population, opt::NelderMead)
     fit_sw = pop.fit[secondWorst]
     fit_worst = pop.fit[worst]
 
-    xc = opt.xc
+    x0 = opt.x0
     xr = opt.xr
     xe = opt.xe
-    xc2 = opt.xc2
+    xc = opt.xc
 
     # --- Compute centroid (excluding worst)
-    fill!(xc, 0.0)
+    fill!(x0, 0.0)
     @inbounds for k in 1:(Np-1)
         xk = pop.x[idx[k]]
         for j in 1:Nx
-            xc[j] += xk[j]
+            x0[j] += xk[j]
         end
     end
     @inbounds for j in 1:Nx
-        xc[j] /= (Np - 1)
+        x0[j] /= (Np - 1)
     end
 
-    # --- Reflection: xr = xc + α*(xc - x_worst)
+    # --- Reflection: xr = x0 + α*(x0 - x_worst)
     xw = pop.x[worst]
     @inbounds for j in 1:Nx
-        xr[j] = xc[j] + opt.α * (xc[j] - xw[j])
+        xr[j] = x0[j] + opt.α * (x0[j] - xw[j])
     end
     cost_r, constr_r = evalPoint!(pop, xr)
 
     # Case 1: reflection is better than the best point → try expansion
     if cost_r + constr_r < fit_best
         @inbounds for j in 1:Nx
-            xe[j] = xc[j] + opt.γ * (xr[j] - xc[j])
+            xe[j] = x0[j] + opt.γ * (xr[j] - x0[j])
         end
         cost_e, constr_e = evalPoint!(pop, xe)
 
@@ -96,19 +96,20 @@ function evolve!(pop::Population, opt::NelderMead)
         # Outside contraction
         if cost_r + constr_r < fit_worst
             @inbounds for j in 1:Nx
-                xc2[j] = xc[j] + opt.ρ * (xr[j] - xc[j])
+                xc[j] = x0[j] + opt.ρ * (xr[j] - x0[j])
             end
         else
             # Inside contraction
             @inbounds for j in 1:Nx
-                xc2[j] = xc[j] - opt.ρ * (xc[j] - xw[j])
+                xc[j] = x0[j] - opt.ρ * (x0[j] - xw[j])
             end
         end
 
-        cost_c, constr_c = evalPoint!(pop, xc2)
+        cost_c, constr_c = evalPoint!(pop, xc)
 
+        # If the contracted point is better than the worst, then it replace the worst
         if cost_c + constr_c < fit_worst
-            pop.x[worst] .= xc2
+            pop.x[worst] .= xc
             pop.cost[worst] = cost_c
             pop.constr[worst] = constr_c
         else

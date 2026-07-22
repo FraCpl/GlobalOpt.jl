@@ -26,9 +26,7 @@ end
 
 function evolve!(pop::Population, optimizer::PSO)
     # Init parameters if not done already
-    if !optimizer.initDone
-        initPSO!(optimizer, pop)
-    end
+    !optimizer.initDone && initPSO!(optimizer, pop)
 
     # Evolution cycle
     G = similar(pop.x[1])
@@ -74,7 +72,7 @@ function clipAndStop!(x::Vector{Float64}, v::Vector{Float64}, pop::Population)
             x[j] = pop.lb[j]
             v[j] = 0.0
         elseif x[j] > pop.ub[j]
-            x[j] = pop.lb[j]
+            x[j] = pop.ub[j]
             v[j] = 0.0
         end
     end

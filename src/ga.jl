@@ -13,6 +13,7 @@ mutable struct GA <: AbstractOptimizer
     Ncross::Int
     Nmutate::Int
 end
+
 function GA(;
     selection::Function=tournament,  # tournament or roulette
     crossover::Function=crossoverBlend,

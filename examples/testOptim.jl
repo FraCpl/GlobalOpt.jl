@@ -4,8 +4,8 @@ include("TestFunctions.jl")
 
 function main()
 
-    f = ackley; lb, ub = ackleyBounds()
-    # f = beale; lb, ub = bealeBounds()
+    # f = ackley; lb, ub = ackleyBounds()
+    f = beale; lb, ub = bealeBounds()
     # f = himmelblau; lb, ub = himmelblauBounds()
 
     xBest, pop, costHistGA = optimize(f, lb, ub; Npop=50, optimizer=GA(), verbose=false, minFit=1e-10)
@@ -26,7 +26,7 @@ function main()
     ax = GLMakie.Axis(fig[1, 1], xlabel="Iterations", ylabel="Fitness", yscale=log10)
     scatterlines!(ax, costHistGA; label="GA")
     scatterlines!(ax, costHistDE; label="DE")
-    scatterlines!(ax, costHistNM; label="NelderMead")
+    scatterlines!(ax, costHistNM; label="Nelder-Mead")
     axislegend(ax)
 end
 main();
