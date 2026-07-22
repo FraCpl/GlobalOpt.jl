@@ -24,7 +24,6 @@ end
 function evolve!(pop::Population, opt::NelderMead)
     Nx = length(pop.lb)
     Np = pop.Npop
-
     idx = pop.idx
 
     # Sort simplex by fitness
