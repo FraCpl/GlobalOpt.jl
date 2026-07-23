@@ -10,4 +10,7 @@ include("ga.jl")
 include("pso.jl")
 include("nelderMead.jl")
 
+export scaleLin, scaleLog
+include("utils.jl")
+
 end
