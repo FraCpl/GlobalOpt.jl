@@ -8,8 +8,8 @@ function main()
     f = beale; lb, ub = bealeBounds()
     # f = himmelblau; lb, ub = himmelblauBounds()
 
-    xBest, pop, costHistGA = optimize(f, lb, ub; Npop=50, optimizer=GA(), verbose=false, minFit=1e-10)
-    @show pop.cost[pop.iBest], xBest
+    # xBest, pop, costHistGA = optimize(f, lb, ub; Npop=50, optimizer=GA(), verbose=false, minFit=1e-10)
+    # @show pop.cost[pop.iBest], xBest
 
     xBest, pop, costHistDE = optimize(f, lb, ub; Npop=50, optimizer=DE(), verbose=false, minFit=1e-10)
     @show pop.cost[pop.iBest], xBest
@@ -24,7 +24,7 @@ function main()
 
     fig = Figure(); display(fig)
     ax = GLMakie.Axis(fig[1, 1], xlabel="Iterations", ylabel="Fitness", yscale=log10)
-    scatterlines!(ax, costHistGA; label="GA")
+    # scatterlines!(ax, costHistGA; label="GA")
     scatterlines!(ax, costHistDE; label="DE")
     scatterlines!(ax, costHistNM; label="Nelder-Mead")
     axislegend(ax)

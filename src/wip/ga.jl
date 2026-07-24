@@ -72,7 +72,7 @@ function evolve!(pop::Population, optimizer::GA)
     for _ in 1:optimizer.Nmutate
         # Select parents
         iParents[1] = optimizer.selection(iSort, pop)
-        xNew[iSort[k]] = copy(pop.x[iParents[1]])
+        xNew[iSort[k]] .= pop.x[iParents[1]]
 
         # Mutate parents
         optimizer.mutation(xNew[iSort[k]], pop, optimizer)
