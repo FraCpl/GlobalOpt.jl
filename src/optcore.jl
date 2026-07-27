@@ -183,6 +183,7 @@ function optimize(
     verbose::Bool=true,
     iterCallback::F=(iter, pop)->false,
     rng=Random.default_rng(),
+    useThreads::Bool=true,
 ) where {T<:AbstractOptimizer, F}
 
     # Check NelderMead properties
@@ -202,7 +203,7 @@ function optimize(
     # Start optimizing
     @inbounds for iter in 1:maxIter
         # Perform one iteration
-        evolve!(pop, optimizer, rng)
+        evolve!(pop, optimizer, rng, useThreads)
 
         # Post-process iteration
         costHist[iter] = pop.fit[pop.iBest]

@@ -28,18 +28,45 @@ function DE(; strategy::S=StrategyDE2(), F=0.8, CR=0.9, cx::X=BinomialCxDE()) wh
     return DE(strategy, cx, clamp(F, 0.0, 2.0), clamp(CR, 0.0, 1.0))
 end
 
-function evolve!(pop::Population, opt::DE{S, X}, rng) where {S<:AbstractStrategyDE, X<:AbstractCrossoverDE}
+function evolve!(pop::Population, opt::DE{S, X}, rng, useThreads::Bool) where {S<:AbstractStrategyDE, X<:AbstractCrossoverDE}
+    return useThreads ? evolveThreads!(pop, opt, rng) : evolveSerial!(pop, opt, rng)
+end
+
+function evolveSerial!(pop::Population, opt::DE{S, X}, rng) where {S<:AbstractStrategyDE, X<:AbstractCrossoverDE}
     # Pre-allocate stuff
-    # xOffspring = pop.xTmp                 # [SINGLE-THREAD]
-    # idx = pop.idx                         # [SINGLE-THREAD]
+    xOffspring = pop.xTmp
+    idx = pop.idx
+
+    # Start DE cycle
+    for i in eachindex(pop.x)
+        shuffle!(idx)
+
+        # Perform Mutation
+        mutation!(xOffspring, i, opt, pop, idx)
+
+        # Perform Crossover - BIN (if strategy > 0) or EXP (if strategy < 0)
+        crossover!(xOffspring, i, opt, pop, rng)
+
+        # Evaluate cost and constraints of offspring
+        pop.applyBounds!(xOffspring)
+        costOffspring, constrOffspring = pop.fun(xOffspring)
+
+        # Selection - one by one comparison
+        compare1vs1!(i, pop, xOffspring, costOffspring, constrOffspring)
+    end
+
+    # Evaluate fitness of new population
+    evalFitness!(pop)
+end
+
+function evolveThreads!(pop::Population, opt::DE{S, X}, rng) where {S<:AbstractStrategyDE, X<:AbstractCrossoverDE}
+    # Pre-allocate stuff
     N = length(pop.x)                       # [MULTITHREAD]
 
     # Start DE cycle
-    # for i in eachindex(pop.x)             # [SINGLE-THREAD]
-        # shuffle!(idx)                     # [SINGLE-THREAD]
     @threads for i in 1:N                   # [MULTITHREAD]
         xOffspring = similar(pop.x[1])      # [MULTITHREAD] local buffer
-        idx = randperm(rng, N)                   # [MULTITHREAD] local shuffled indices
+        idx = randperm(rng, N)              # [MULTITHREAD] local shuffled indices
 
         # Perform Mutation
         mutation!(xOffspring, i, opt, pop, idx)
