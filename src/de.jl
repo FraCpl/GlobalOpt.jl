@@ -28,17 +28,24 @@ function DE(; strategy::S=StrategyDE2(), F=0.8, CR=0.9, cx::X=BinomialCxDE()) wh
     return DE(strategy, cx, clamp(F, 0.0, 2.0), clamp(CR, 0.0, 1.0))
 end
 
-function evolve!(pop::Population, opt::DE{S, X}) where {S<:AbstractStrategyDE, X<:AbstractCrossoverDE}
+function evolve!(pop::Population, opt::DE{S, X}, rng) where {S<:AbstractStrategyDE, X<:AbstractCrossoverDE}
     # Pre-allocate stuff
-    xOffspring = pop.xTmp
+    # xOffspring = pop.xTmp                 # [SINGLE-THREAD]
+    # idx = pop.idx                         # [SINGLE-THREAD]
+    N = length(pop.x)                       # [MULTITHREAD]
 
     # Start DE cycle
-    for i in eachindex(pop.x)
+    # for i in eachindex(pop.x)             # [SINGLE-THREAD]
+        # shuffle!(idx)                     # [SINGLE-THREAD]
+    @threads for i in 1:N                   # [MULTITHREAD]
+        xOffspring = similar(pop.x[1])      # [MULTITHREAD] local buffer
+        idx = randperm(rng, N)                   # [MULTITHREAD] local shuffled indices
+
         # Perform Mutation
-        mutation!(xOffspring, i, opt, pop)
+        mutation!(xOffspring, i, opt, pop, idx)
 
         # Perform Crossover - BIN (if strategy > 0) or EXP (if strategy < 0)
-        crossover!(xOffspring, i, opt, pop)
+        crossover!(xOffspring, i, opt, pop, rng)
 
         # Evaluate cost and constraints of offspring
         pop.applyBounds!(xOffspring)
@@ -68,16 +75,15 @@ end
 #
 # Author: F. Capolupo
 # European Space Agency, 2022
-function mutation!(xOffspring::Vector{Float64}, i::Int, opt::DE, pop::Population)
+function mutation!(xOffspring::Vector{Float64}, i::Int, opt::DE, pop::Population, idx::Vector{Int})
 
     # Select 5 different random parents
-    shuffle!(pop.idx)
     k = 0
-    ip1, k = randomParentIndex(i, k, pop.idx)
-    ip2, k = randomParentIndex(i, k, pop.idx)
-    ip3, k = randomParentIndex(i, k, pop.idx)
-    ip4, k = randomParentIndex(i, k, pop.idx)
-    ip5, k = randomParentIndex(i, k, pop.idx)
+    ip1, k = randomParentIndex(i, k, idx)
+    ip2, k = randomParentIndex(i, k, idx)
+    ip3, k = randomParentIndex(i, k, idx)
+    ip4, k = randomParentIndex(i, k, idx)
+    ip5, k = randomParentIndex(i, k, idx)
 
     # Perform Mutation [1]
     # X: bin or exp, depending on 'useBin' flag
@@ -99,12 +105,12 @@ function mutation!(xOffspring::Vector{Float64}, i::Int, opt::DE, pop::Population
 end
 
 # BIN - Binomial crossover
-function crossover!(xOffspring::Vector{Float64}, i::Int, opt::DE{S, BinomialCxDE}, pop::Population) where {S<:AbstractStrategyDE}
+function crossover!(xOffspring::Vector{Float64}, i::Int, opt::DE{S, BinomialCxDE}, pop::Population, rng) where {S<:AbstractStrategyDE}
     xi = pop.x[i]
     Nx = length(xi)
-    jRand = rand(1:Nx)              # Keep at least one component mutated
+    jRand = rand(rng, 1:Nx)              # Keep at least one component mutated
     @inbounds for j in eachindex(xi)
-        if rand() > opt.CR && j != jRand
+        if rand(rng) > opt.CR && j != jRand
             xOffspring[j] = xi[j]
         end
     end
@@ -112,14 +118,14 @@ function crossover!(xOffspring::Vector{Float64}, i::Int, opt::DE{S, BinomialCxDE
 end
 
 # EXP - Exponential crossover
-function crossover!(xOffspring::Vector{Float64}, i::Int, opt::DE{S, ExponentialCxDE}, pop::Population) where {S<:AbstractStrategyDE}
+function crossover!(xOffspring::Vector{Float64}, i::Int, opt::DE{S, ExponentialCxDE}, pop::Population, rng) where {S<:AbstractStrategyDE}
     xi = pop.x[i]
     Nx = length(xi)
     L = 1
-    while rand() ≤ opt.CR && L < Nx
+    while rand(rng) ≤ opt.CR && L < Nx
         L += 1
     end
-    j0 = rand(1:Nx)
+    j0 = rand(rng, 1:Nx)
     @inbounds for k in 0:(L - 1)
         j = mod1(j0 + k, Nx)
         xOffspring[j] = xi[j]

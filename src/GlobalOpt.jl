@@ -2,6 +2,7 @@ module GlobalOpt
 
 using Random
 using LinearAlgebra
+using Base.Threads
 
 export optimize, DE, NelderMead#, GA, PSO
 include("optcore.jl")

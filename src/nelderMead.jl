@@ -21,7 +21,7 @@ NelderMead(Nx::Int; α::Float64=1.0, γ::Float64=2.0, ρ::Float64=0.5, σ::Float
 end
 
 # CHATGPT CODE
-function evolve!(pop::Population, opt::NelderMead)
+function evolve!(pop::Population, opt::NelderMead, rng)
     Nx = length(pop.lb)
     Np = pop.Npop
     idx = pop.idx

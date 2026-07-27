@@ -19,14 +19,14 @@ mutable struct Population{F,B}
     idx::Vector{Int}
 end
 
-function Population(Npop, f, x0, lb, ub, eqTol, bounds)
+function Population(Npop, f, x0, lb, ub, eqTol, bounds, rng)
     Nx = length(lb)
 
     # Choose bounds function
     applyBounds! = if bounds === :clip
         (x -> clipBounds!(x, lb, ub))
     elseif bounds === :rand
-        (x -> randBounds!(x, lb, ub))
+        (x -> randBounds!(x, lb, ub, rng))
     else
         (x -> nothing)
     end
@@ -49,7 +49,7 @@ function Population(Npop, f, x0, lb, ub, eqTol, bounds)
 
     # Random initialization of all members of the population
     @inbounds for i in eachindex(pop.x), j in 1:Nx
-        pop.x[i][j] = lb[j] + (ub[j] - lb[j])*rand()
+        pop.x[i][j] = lb[j] + (ub[j] - lb[j])*rand(rng)
     end
 
     # Add initial guesses as provided by the user to the population
@@ -80,10 +80,10 @@ end
     return nothing
 end
 
-@inline function randBounds!(x, lb, ub)
+@inline function randBounds!(x, lb, ub, rng)
     @inbounds for i in eachindex(x)
         if x[i] < lb[i] || x[i] > ub[i]
-            x[i] = lb[i] + (ub[i] - lb[i])*rand()
+            x[i] = lb[i] + (ub[i] - lb[i])*rand(rng)
         end
     end
     return nothing
@@ -182,6 +182,7 @@ function optimize(
     bounds=:clip,                       # clip, rand, or none
     verbose::Bool=true,
     iterCallback::F=(iter, pop)->false,
+    rng=Random.default_rng(),
 ) where {T<:AbstractOptimizer, F}
 
     # Check NelderMead properties
@@ -192,7 +193,7 @@ function optimize(
     end
 
     # Initialize population
-    pop = Population(Npop, f, x0, lb, ub, eqTol, bounds)
+    pop = Population(Npop, f, x0, lb, ub, eqTol, bounds, rng)
 
     # Init iterations
     msg = "Maximum number of iterations reached."
@@ -201,7 +202,7 @@ function optimize(
     # Start optimizing
     @inbounds for iter in 1:maxIter
         # Perform one iteration
-        evolve!(pop, optimizer)
+        evolve!(pop, optimizer, rng)
 
         # Post-process iteration
         costHist[iter] = pop.fit[pop.iBest]
