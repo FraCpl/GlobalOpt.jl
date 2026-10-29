@@ -227,9 +227,9 @@ function optimize(
 
     # Print exit message and return solution
     verbose && println(msg)
-    iLast = findlast(isnan, costHist)
+    iLast = findfirst(isnan, costHist)
     if !isnothing(iLast)
-        costHist = costHist[1:iLast]
+        costHist = costHist[1:iLast-1]
     end
     return pop.x[pop.iBest], pop, costHist
 end
